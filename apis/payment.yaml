@@ -1,0 +1,280 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Payment API
+  version: 1.0.0
+  description: |
+    API quản lý thanh toán tiền mặt và điện tử. CAB System không nhận hoặc lưu
+    số thẻ, CVV, PIN hay thông tin tài khoản thanh toán nhạy cảm. Giao dịch thành
+    công là bất biến; DELETE chỉ lưu trữ logic bản ghi thất bại/hủy và phải audit.
+servers:
+  - url: /api/v1
+tags:
+  - name: Payments
+security:
+  - bearerAuth: []
+paths:
+  /payments:
+    post:
+      tags: [Payments]
+      operationId: createPayment
+      summary: Tạo thanh toán cho chuyến
+      description: Customer chọn CASH hoặc ELECTRONIC sau khi cước đã được xác định.
+      x-traceability: [BR10, FR10.1, FR10.2, FR10.3, FR10.4, FR10.6, FR10.8, UC14, AC10.1, AC10.2, AC10.3, AC10.5]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PaymentCreateRequest'}
+            examples:
+              cash:
+                value: {tripId: trip_01HXYZ, paymentMethod: CASH}
+              electronic:
+                value: {tripId: trip_01HXYZ, paymentMethod: ELECTRONIC, paymentToken: tok_provider_123}
+      responses:
+        '201':
+          description: Thanh toán được tạo.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/payments/pay_01HXYZ}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Payments]
+      operationId: listPayments
+      summary: Tra cứu danh sách thanh toán
+      description: Customer chỉ xem giao dịch của mình; Staff tra cứu lịch sử giao dịch theo quyền.
+      x-traceability: [BR10, FR10.6, BR13, FR13.8, UC14, UC17, AC10.3, AC13.4, BR15, FR15.4]
+      parameters:
+        - name: tripId
+          in: query
+          schema: {type: string}
+        - name: customerId
+          in: query
+          schema: {type: string}
+        - name: paymentMethod
+          in: query
+          schema: {$ref: '#/components/schemas/PaymentMethod'}
+        - name: paymentStatus
+          in: query
+          schema: {$ref: '#/components/schemas/PaymentStatus'}
+        - name: from
+          in: query
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          schema: {type: string, format: date-time}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Danh sách thanh toán.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/PaymentListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /payments/{paymentId}:
+    parameters:
+      - {$ref: '#/components/parameters/PaymentId'}
+    get:
+      tags: [Payments]
+      operationId: getPaymentById
+      summary: Xem chi tiết và trạng thái thanh toán
+      x-traceability: [BR10, FR10.6, FR10.7, UC14, AC10.3, AC10.4, BR15, FR15.4]
+      responses:
+        '200':
+          description: Chi tiết thanh toán, không chứa thông tin tài khoản nhạy cảm.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Payments]
+      operationId: updatePayment
+      summary: Cập nhật trạng thái thanh toán
+      description: Chỉ Payment Service/callback hợp lệ hoặc Staff có quyền mới cập nhật; mọi thay đổi phải audit.
+      x-traceability: [BR10, FR10.5, FR10.6, FR10.7, BR11, FR11.1, FR11.2, FR11.3, UC14, UC15, AC10.3, AC10.4, AC11.1, AC11.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PaymentUpdateRequest'}
+            example: {paymentStatus: SUCCESS, providerReference: TXN-92837}
+      responses:
+        '200':
+          description: Trạng thái thanh toán được cập nhật.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    delete:
+      tags: [Payments]
+      operationId: deletePayment
+      summary: Lưu trữ logic bản ghi thanh toán
+      description: |
+        Chỉ Staff có quyền nhạy cảm được phép. Không cho xóa giao dịch SUCCESS;
+        bản ghi FAILED/CANCELLED chỉ được archive và AuditLog phải được giữ lại.
+      x-requirement-source: CRUD bổ sung; không xóa vật lý dữ liệu giao dịch
+      x-traceability: [BR13, FR13.8, BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.4, FR15.6]
+      responses:
+        '204': {description: Bản ghi thất bại hoặc đã hủy được archive.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Không được archive giao dịch thành công hoặc đang xử lý.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+  /payments/{paymentId}/retry:
+    parameters:
+      - {$ref: '#/components/parameters/PaymentId'}
+    post:
+      tags: [Payments]
+      operationId: retryPayment
+      summary: Xử lý lại thanh toán điện tử thất bại
+      description: Chính sách số lần và thời gian retry vẫn là TBD.
+      x-traceability: [BR11, FR11.4, UC15, AC11.3]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                paymentToken: {type: string, writeOnly: true, description: Token từ nhà cung cấp; không phải số thẻ/CVV/PIN.}
+      responses:
+        '202':
+          description: Yêu cầu xử lý lại đã được tiếp nhận.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Payment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /payments/provider/callback:
+    post:
+      tags: [Payments]
+      operationId: handlePaymentProviderCallback
+      summary: Nhận kết quả từ nhà cung cấp thanh toán
+      description: Xác thực chữ ký callback; không dùng JWT người dùng và phải chống xử lý trùng.
+      security:
+        - providerSignature: []
+      x-traceability: [BR10, FR10.5, FR10.6, FR10.7, BR11, FR11.1, FR11.2, FR11.3, AC10.3, AC10.4, AC11.1, AC11.2]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProviderCallbackRequest'}
+      responses:
+        '200': {description: Callback đã được xác minh và xử lý hoặc đã xử lý trước đó.}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {description: Chữ ký nhà cung cấp không hợp lệ.}
+        '404': {$ref: '#/components/responses/NotFound'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+    providerSignature:
+      type: apiKey
+      in: header
+      name: X-Provider-Signature
+  parameters:
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema: {type: string, example: pay_01HXYZ}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  schemas:
+    PaymentMethod:
+      type: string
+      enum: [CASH, ELECTRONIC]
+    PaymentStatus:
+      type: string
+      enum: [PENDING, PROCESSING, SUCCESS, FAILED, CANCELLED]
+    PaymentCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [tripId, paymentMethod]
+      properties:
+        tripId: {type: string}
+        paymentMethod: {$ref: '#/components/schemas/PaymentMethod'}
+        paymentToken:
+          type: string
+          writeOnly: true
+          description: Token do nhà cung cấp cấp; cấm gửi số thẻ, CVV, PIN.
+    PaymentUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [paymentStatus]
+      properties:
+        paymentStatus: {$ref: '#/components/schemas/PaymentStatus'}
+        providerReference: {type: string, maxLength: 200}
+        failureCode: {type: string, maxLength: 100}
+    ProviderCallbackRequest:
+      type: object
+      additionalProperties: false
+      required: [paymentId, paymentStatus, providerReference]
+      properties:
+        paymentId: {type: string}
+        paymentStatus: {$ref: '#/components/schemas/PaymentStatus'}
+        providerReference: {type: string}
+        failureCode: {type: string}
+    Payment:
+      type: object
+      required: [paymentId, tripId, amount, paymentMethod, paymentStatus, createdAt, updatedAt]
+      properties:
+        paymentId: {type: string, example: pay_01HXYZ}
+        tripId: {type: string, example: trip_01HXYZ}
+        amount: {type: number, format: double, minimum: 0, example: 150000}
+        paymentMethod: {$ref: '#/components/schemas/PaymentMethod'}
+        paymentStatus: {$ref: '#/components/schemas/PaymentStatus'}
+        providerReference: {type: string, nullable: true, example: TXN-92837}
+        failureCode: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    PaymentListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Payment'}}
+        page: {type: integer}
+        pageSize: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: PAYMENT_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy thanh toán.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthorized: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Forbidden: {description: Không có quyền truy cập giao dịch, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Không tìm thấy thanh toán, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Conflict: {description: Xung đột trạng thái hoặc thanh toán đã tồn tại, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    UnprocessableEntity: {description: Chuyến hoặc dữ liệu thanh toán không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

@@ -1,0 +1,207 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Vehicle API
+  version: 1.0.0
+  description: |
+    API CRUD phương tiện của tài xế. DELETE là soft delete; phương tiện đã gắn
+    với lịch sử chuyến đi không bị xóa vật lý. Chi tiết biển số, hãng và màu xe
+    vẫn là TBD nên được lưu trong vehicleInfo linh hoạt.
+servers:
+  - url: /api/v1
+tags:
+  - name: Vehicles
+security:
+  - bearerAuth: []
+paths:
+  /vehicles:
+    post:
+      tags: [Vehicles]
+      operationId: createVehicle
+      summary: Thêm phương tiện
+      description: Tài xế thêm phương tiện của mình hoặc Staff thêm khi có quyền.
+      x-traceability: [BR02, FR02.4, FR02.7, UC04, AC02.1, AC02.4]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VehicleCreateRequest'
+            example:
+              driverId: drv_01HXYZ
+              serviceTypeId: BIKE
+              vehicleInfo:
+                licensePlate: 59A1-12345
+                brand: Honda
+                color: Đen
+      responses:
+        '201':
+          description: Tạo phương tiện thành công.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/vehicles/veh_01HXYZ}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Vehicle'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Vehicles]
+      operationId: listVehicles
+      summary: Lấy danh sách phương tiện
+      description: Tài xế xem phương tiện của mình; Staff tra cứu theo quyền.
+      x-traceability: [BR02, FR02.4, FR02.7, BR13, FR13.3, UC04, UC17, AC02.4, AC13.1]
+      parameters:
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+        - name: driverId
+          in: query
+          schema: {type: string}
+        - name: serviceTypeId
+          in: query
+          schema: {type: string}
+        - name: status
+          in: query
+          schema: {type: string}
+      responses:
+        '200':
+          description: Danh sách phương tiện.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VehicleListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /vehicles/{vehicleId}:
+    parameters:
+      - {$ref: '#/components/parameters/VehicleId'}
+    get:
+      tags: [Vehicles]
+      operationId: getVehicleById
+      summary: Xem chi tiết phương tiện
+      x-traceability: [BR02, FR02.4, FR02.7, UC04, AC02.4]
+      responses:
+        '200':
+          description: Chi tiết phương tiện.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Vehicle'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Vehicles]
+      operationId: updateVehicle
+      summary: Cập nhật phương tiện
+      description: Tài xế cập nhật phương tiện của mình; Staff cập nhật khi có quyền.
+      x-traceability: [BR02, FR02.2, FR02.4, FR02.7, UC04, AC02.1, AC02.4]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/VehicleUpdateRequest'}
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Vehicle'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    delete:
+      tags: [Vehicles]
+      operationId: deleteVehicle
+      summary: Ngừng sử dụng phương tiện
+      description: Chuyển trạng thái phương tiện sang INACTIVE và ghi AuditLog.
+      x-traceability: [BR13, FR13.3, BR14, FR14.1, FR14.4, BR15, FR15.2, FR15.6]
+      responses:
+        '204': {description: Phương tiện đã ngừng hoạt động.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Phương tiện đang gắn với chuyến chưa kết thúc.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    VehicleId:
+      name: vehicleId
+      in: path
+      required: true
+      schema: {type: string, example: veh_01HXYZ}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  schemas:
+    VehicleCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [driverId, serviceTypeId, vehicleInfo]
+      properties:
+        driverId: {type: string}
+        serviceTypeId: {type: string}
+        vehicleInfo:
+          type: object
+          description: Cấu trúc chi tiết đang TBD.
+          additionalProperties: true
+    VehicleUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        serviceTypeId: {type: string}
+        vehicleInfo: {type: object, additionalProperties: true}
+        status: {type: string, example: ACTIVE}
+    Vehicle:
+      allOf:
+        - $ref: '#/components/schemas/VehicleCreateRequest'
+        - type: object
+          required: [vehicleId, status, createdAt, updatedAt]
+          properties:
+            vehicleId: {type: string, example: veh_01HXYZ}
+            status: {type: string, example: ACTIVE}
+            createdAt: {type: string, format: date-time}
+            updatedAt: {type: string, format: date-time}
+    VehicleListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Vehicle'}}
+        page: {type: integer}
+        pageSize: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: VEHICLE_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy phương tiện.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {$ref: '#/components/responses/Error400'}
+    Unauthorized: {$ref: '#/components/responses/Error401'}
+    Forbidden: {$ref: '#/components/responses/Error403'}
+    NotFound: {$ref: '#/components/responses/Error404'}
+    Conflict: {$ref: '#/components/responses/Error409'}
+    UnprocessableEntity: {$ref: '#/components/responses/Error422'}
+    Error400: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error401: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error403: {description: Không có quyền thực hiện, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error404: {description: Không tìm thấy phương tiện, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error409: {description: Dữ liệu trùng hoặc xung đột trạng thái, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Error422: {description: Dữ liệu không đạt quy tắc kiểm tra, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

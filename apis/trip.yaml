@@ -1,0 +1,229 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Trip API
+  version: 1.0.0
+  description: |
+    API CRUD yêu cầu đặt xe và chuyến đi. Customer tạo và theo dõi chuyến;
+    Driver cập nhật trạng thái khi được phân công; Staff quản lý theo quyền.
+    DELETE là yêu cầu hủy/soft delete vì chính sách hủy chuyến vẫn là TBD.
+servers:
+  - url: /api/v1
+tags:
+  - name: Trips
+security:
+  - bearerAuth: []
+paths:
+  /trips:
+    post:
+      tags: [Trips]
+      operationId: createTrip
+      summary: Tạo yêu cầu đặt xe
+      description: Sau khi ghi nhận, hệ thống chuyển chuyến sang SEARCHING_DRIVER và khởi động matching.
+      x-traceability: [BR04, FR04.1, FR04.2, FR04.3, FR04.4, FR04.5, FR04.6, FR04.7, UC06, AC04.1, AC04.2, AC04.3, AC04.4]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TripCreateRequest'}
+            example:
+              serviceTypeId: BIKE
+              pickupLocation: {latitude: 10.8231, longitude: 106.6297, address: IUH}
+              destination: {latitude: 10.7626, longitude: 106.6601, address: Quận 1}
+      responses:
+        '201':
+          description: Yêu cầu đặt xe được tiếp nhận.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/trips/trip_01HXYZ}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Trip'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Trips]
+      operationId: listTrips
+      summary: Lấy danh sách hoặc lịch sử chuyến
+      description: Customer/Driver chỉ xem chuyến liên quan; Staff xem theo quyền.
+      x-traceability: [BR07, FR07.1, FR07.4, BR08, FR08.1, FR08.2, BR13, FR13.4, FR13.5, UC10, UC11, UC17, AC07.1, AC07.4, AC08.1, AC13.2]
+      parameters:
+        - name: customerId
+          in: query
+          schema: {type: string}
+        - name: driverId
+          in: query
+          schema: {type: string}
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/TripStatus'}
+        - name: from
+          in: query
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          schema: {type: string, format: date-time}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Danh sách chuyến.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TripListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /trips/{tripId}:
+    parameters:
+      - {$ref: '#/components/parameters/TripId'}
+    get:
+      tags: [Trips]
+      operationId: getTripById
+      summary: Xem chi tiết và theo dõi chuyến
+      description: Trả tài xế được phân công, ETA, trạng thái và fareAmount nếu đã có.
+      x-traceability: [BR07, FR07.1, FR07.2, FR07.3, FR07.4, FR07.5, BR08, FR08.3, FR08.4, UC10, UC11, AC07.1, AC07.2, AC07.3, AC07.4, AC08.2]
+      responses:
+        '200':
+          description: Chi tiết chuyến.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Trip'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Trips]
+      operationId: updateTrip
+      summary: Cập nhật thông tin hoặc trạng thái chuyến
+      description: |
+        Customer chỉ sửa điểm đón, điểm đến hoặc loại dịch vụ trước khi có Driver.
+        Driver được phân công chỉ cập nhật trạng thái đúng thứ tự. Staff can thiệp
+        khi có quyền; thao tác nhạy cảm phải được audit.
+      x-traceability: [BR06, FR06.1, FR06.2, FR06.3, FR06.4, FR06.5, UC09, AC06.1, AC06.2, AC06.3, AC06.4, BR13, FR13.4, FR13.7]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TripUpdateRequest'}
+            examples:
+              updateStatus:
+                value: {tripStatus: ARRIVED_AT_PICKUP}
+              updateDestination:
+                value: {destination: {latitude: 10.7626, longitude: 106.6601, address: Quận 1}}
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Trip'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    delete:
+      tags: [Trips]
+      operationId: deleteTrip
+      summary: Yêu cầu hủy chuyến
+      description: Soft delete sang CANCELLED; điều kiện và phí hủy là TBD nên phải cấu hình theo chính sách được duyệt.
+      x-requirement-source: CRUD bổ sung; phụ thuộc chính sách hủy chuyến TBD
+      x-traceability: [BR13, FR13.4, FR13.7, BR14, FR14.1, FR14.4, BR15, FR15.6]
+      responses:
+        '204': {description: Yêu cầu hủy được ghi nhận.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Trạng thái chuyến không cho phép hủy.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    TripId:
+      name: tripId
+      in: path
+      required: true
+      schema: {type: string, example: trip_01HXYZ}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  schemas:
+    GeoPoint:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude]
+      properties:
+        latitude: {type: number, format: double, minimum: -90, maximum: 90}
+        longitude: {type: number, format: double, minimum: -180, maximum: 180}
+        address: {type: string, maxLength: 500}
+    TripStatus:
+      type: string
+      enum: [SEARCHING_DRIVER, DRIVER_ASSIGNED, ARRIVED_AT_PICKUP, PICKED_UP, IN_PROGRESS, COMPLETED, CANCELLED, FAILED]
+      description: CANCELLED và FAILED là trạng thái kỹ thuật bổ sung; chính sách hủy vẫn TBD.
+    TripCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [serviceTypeId, pickupLocation, destination]
+      properties:
+        serviceTypeId: {type: string}
+        pickupLocation: {$ref: '#/components/schemas/GeoPoint'}
+        destination: {$ref: '#/components/schemas/GeoPoint'}
+    TripUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        serviceTypeId: {type: string}
+        pickupLocation: {$ref: '#/components/schemas/GeoPoint'}
+        destination: {$ref: '#/components/schemas/GeoPoint'}
+        tripStatus: {$ref: '#/components/schemas/TripStatus'}
+    Trip:
+      type: object
+      required: [tripId, customerId, serviceTypeId, pickupLocation, destination, tripStatus, createdAt, updatedAt]
+      properties:
+        tripId: {type: string, example: trip_01HXYZ}
+        customerId: {type: string, example: cus_01HXYZ}
+        driverId: {type: string, nullable: true, example: drv_01HXYZ}
+        serviceTypeId: {type: string, example: BIKE}
+        pickupLocation: {$ref: '#/components/schemas/GeoPoint'}
+        destination: {$ref: '#/components/schemas/GeoPoint'}
+        tripStatus: {$ref: '#/components/schemas/TripStatus'}
+        estimatedArrivalTime: {type: string, format: date-time, nullable: true}
+        fareAmount: {type: number, format: double, minimum: 0, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        completedAt: {type: string, format: date-time, nullable: true}
+    TripListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Trip'}}
+        page: {type: integer}
+        pageSize: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: TRIP_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy chuyến đi.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthorized: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Forbidden: {description: Không có quyền truy cập chuyến, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Không tìm thấy chuyến, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Conflict: {description: Xung đột trạng thái chuyến, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    UnprocessableEntity: {description: Dữ liệu chuyến không đạt quy tắc kiểm tra, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

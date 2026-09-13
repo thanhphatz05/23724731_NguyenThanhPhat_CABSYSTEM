@@ -1,0 +1,192 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Rating API
+  version: 1.0.0
+  description: |
+    API CRUD đánh giá tài xế. Customer chỉ được tạo đánh giá cho chuyến đã hoàn thành
+    của mình; mỗi Trip tối đa một Rating. Thang điểm và thời hạn sửa/xóa đang TBD.
+servers:
+  - url: /api/v1
+tags:
+  - name: Ratings
+security:
+  - bearerAuth: []
+paths:
+  /ratings:
+    post:
+      tags: [Ratings]
+      operationId: createRating
+      summary: Đánh giá tài xế sau chuyến
+      x-traceability: [BR08, FR08.5, FR08.6, UC12, AC08.3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RatingCreateRequest'}
+            example: {tripId: trip_01HXYZ, ratingValue: 5, comment: Tài xế lịch sự}
+      responses:
+        '201':
+          description: Đánh giá được ghi nhận.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/ratings/rat_01HXYZ}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Rating'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Ratings]
+      operationId: listRatings
+      summary: Lấy danh sách đánh giá
+      description: Customer xem đánh giá của mình; Driver xem đánh giá nhận được; Staff tra cứu theo quyền.
+      x-traceability: [BR08, FR08.3, FR08.6, UC11, UC12, BR13, FR13.2]
+      parameters:
+        - name: customerId
+          in: query
+          schema: {type: string}
+        - name: driverId
+          in: query
+          schema: {type: string}
+        - name: tripId
+          in: query
+          schema: {type: string}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Danh sách đánh giá.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RatingListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /ratings/{ratingId}:
+    parameters:
+      - {$ref: '#/components/parameters/RatingId'}
+    get:
+      tags: [Ratings]
+      operationId: getRatingById
+      summary: Xem chi tiết đánh giá
+      x-traceability: [BR08, FR08.3, FR08.6, UC11, UC12]
+      responses:
+        '200':
+          description: Chi tiết đánh giá.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Rating'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Ratings]
+      operationId: updateRating
+      summary: Cập nhật đánh giá
+      description: Customer chỉ sửa đánh giá của mình trong thời hạn chính sách TBD; Staff không sửa nội dung thay Customer.
+      x-requirement-source: CRUD bổ sung; thời hạn cập nhật TBD
+      x-traceability: [BR08, FR08.6, BR14, FR14.1, BR15, FR15.1, FR15.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RatingUpdateRequest'}
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Rating'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    delete:
+      tags: [Ratings]
+      operationId: deleteRating
+      summary: Ẩn đánh giá
+      description: Soft delete; Customer xóa đánh giá của mình theo chính sách TBD, Staff chỉ ẩn khi có quyền kiểm duyệt.
+      x-requirement-source: CRUD bổ sung; chính sách xóa đánh giá TBD
+      x-traceability: [BR08, FR08.6, BR14, FR14.1, FR14.4, BR15, FR15.6]
+      responses:
+        '204': {description: Đánh giá đã được ẩn.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    RatingId:
+      name: ratingId
+      in: path
+      required: true
+      schema: {type: string, example: rat_01HXYZ}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  schemas:
+    RatingCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [tripId, ratingValue]
+      properties:
+        tripId: {type: string}
+        ratingValue:
+          type: number
+          description: Chưa đặt minimum/maximum vì thang điểm đang TBD.
+        comment: {type: string, maxLength: 1000}
+    RatingUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        ratingValue:
+          type: number
+          description: Chưa đặt minimum/maximum vì thang điểm đang TBD.
+        comment: {type: string, maxLength: 1000}
+    Rating:
+      type: object
+      required: [ratingId, tripId, customerId, driverId, ratingValue, createdAt, updatedAt]
+      properties:
+        ratingId: {type: string, example: rat_01HXYZ}
+        tripId: {type: string, example: trip_01HXYZ}
+        customerId: {type: string, example: cus_01HXYZ}
+        driverId: {type: string, example: drv_01HXYZ}
+        ratingValue: {type: number, example: 5}
+        comment: {type: string, example: Tài xế lịch sự}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    RatingListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Rating'}}
+        page: {type: integer}
+        pageSize: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: RATING_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy đánh giá.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthorized: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Forbidden: {description: Không có quyền truy cập đánh giá, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Không tìm thấy đánh giá, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Conflict: {description: Chuyến đã có đánh giá hoặc hết thời hạn cập nhật, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    UnprocessableEntity: {description: Chuyến chưa hoàn thành hoặc giá trị đánh giá không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
