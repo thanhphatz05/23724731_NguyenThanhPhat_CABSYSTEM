@@ -1,0 +1,347 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Customer API
+  version: 1.0.0
+  description: |
+    API quản lý tài khoản và hồ sơ khách hàng theo mô hình CRUD.
+    DELETE được triển khai dưới dạng soft delete để bảo toàn lịch sử chuyến đi,
+    thanh toán, đánh giá và dữ liệu audit.
+servers:
+  - url: /api/v1
+tags:
+  - name: Customers
+security:
+  - bearerAuth: []
+
+paths:
+  /customers:
+    post:
+      tags: [Customers]
+      operationId: createCustomer
+      summary: Tạo tài khoản khách hàng
+      description: Khách hàng tự đăng ký; không yêu cầu access token.
+      security: []
+      x-traceability: [BR01, FR01.1, UC01, AC01.1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreateRequest'
+            example:
+              username: phat.nguyen
+              password: StrongPassword123!
+              fullName: Nguyễn Thành Phát
+              phone: "0901234567"
+              email: phat@example.com
+      responses:
+        '201':
+          description: Tạo khách hàng thành công.
+          headers:
+            Location:
+              description: URI của khách hàng vừa tạo.
+              schema:
+                type: string
+                example: /api/v1/customers/cus_01HXYZ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    get:
+      tags: [Customers]
+      operationId: listCustomers
+      summary: Lấy danh sách khách hàng
+      description: Chỉ Staff có quyền quản lý khách hàng được phép gọi.
+      x-traceability: [BR13, FR13.1, UC17, AC13.1, BR14, FR14.1]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+        - name: keyword
+          in: query
+          description: Tìm theo họ tên, số điện thoại, email hoặc username.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Danh sách khách hàng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /customers/{customerId}:
+    parameters:
+      - $ref: '#/components/parameters/CustomerId'
+    get:
+      tags: [Customers]
+      operationId: getCustomerById
+      summary: Xem chi tiết khách hàng
+      description: Khách hàng chỉ xem hồ sơ của mình; Staff được xem khi có quyền.
+      x-traceability: [BR13, FR13.1, UC17, AC13.1, BR15, FR15.1]
+      responses:
+        '200':
+          description: Thông tin khách hàng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Customers]
+      operationId: updateCustomer
+      summary: Cập nhật khách hàng
+      description: |
+        Khách hàng được cập nhật hồ sơ của chính mình. Staff có quyền quản lý
+        được cập nhật trạng thái tài khoản. Các trường không gửi lên được giữ nguyên.
+      x-traceability: [BR01, FR01.6, UC03, AC01.4, BR13, FR13.1]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Customers]
+      operationId: deleteCustomer
+      summary: Ngừng hoạt động tài khoản khách hàng
+      description: |
+        Chỉ Staff có quyền nhạy cảm được phép thực hiện. Hệ thống chuyển trạng thái
+        tài khoản sang INACTIVE, không xóa vật lý dữ liệu liên quan và phải ghi AuditLog.
+      x-traceability: [BR13, FR13.1, BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.6]
+      responses:
+        '204':
+          description: Tài khoản đã được ngừng hoạt động.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Không thể ngừng tài khoản do xung đột trạng thái nghiệp vụ.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: cus_01HXYZ
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  schemas:
+    AccountStatus:
+      type: string
+      description: Giá trị kỹ thuật đề xuất; chính sách trạng thái cần được xác nhận.
+      enum: [ACTIVE, INACTIVE, LOCKED]
+    CustomerCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, fullName, phone, email]
+      properties:
+        username:
+          type: string
+          minLength: 4
+          maxLength: 50
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{9,15}$'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+    CustomerUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{9,15}$'
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    Customer:
+      type: object
+      required: [customerId, userId, username, userType, fullName, phone, email, status, createdAt, updatedAt]
+      properties:
+        customerId:
+          type: string
+          example: cus_01HXYZ
+        userId:
+          type: string
+          example: usr_01HXYZ
+        username:
+          type: string
+          example: phat.nguyen
+        userType:
+          type: string
+          enum: [CUSTOMER]
+        fullName:
+          type: string
+          example: Nguyễn Thành Phát
+        phone:
+          type: string
+          example: "0901234567"
+        email:
+          type: string
+          format: email
+          example: phat@example.com
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CustomerListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: CUSTOMER_NOT_FOUND
+        message:
+          type: string
+          example: Không tìm thấy khách hàng.
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        traceId:
+          type: string
+          example: req_01HXYZ
+  responses:
+    BadRequest:
+      description: Request không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Chưa xác thực hoặc token không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Người dùng không có quyền thực hiện thao tác.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy khách hàng.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Username, số điện thoại hoặc email đã tồn tại.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Dữ liệu đúng cú pháp nhưng không đạt quy tắc kiểm tra.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

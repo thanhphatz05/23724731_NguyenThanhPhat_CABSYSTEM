@@ -1,0 +1,352 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Staff API
+  version: 1.0.0
+  description: |
+    API quản lý tài khoản nhân viên vận hành theo mô hình CRUD.
+    Đây là phần mở rộng theo yêu cầu CRUD cho từng nhóm user. Chỉ ADMIN được tạo,
+    cập nhật quyền và ngừng hoạt động tài khoản Staff. Danh sách quyền chi tiết
+    vẫn là TBD trong SRS và phải được khách hàng xác nhận.
+servers:
+  - url: /api/v1
+tags:
+  - name: Staff
+security:
+  - bearerAuth: []
+
+paths:
+  /staff:
+    post:
+      tags: [Staff]
+      operationId: createStaff
+      summary: Tạo tài khoản nhân viên vận hành
+      description: Chỉ ADMIN được phép tạo Staff; thao tác phải được ghi AuditLog.
+      x-requirement-source: Yêu cầu bổ sung CRUD cho từng user
+      x-traceability: [BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffCreateRequest'
+            example:
+              username: operator.lan
+              password: StrongPassword123!
+              fullName: Nguyễn Thị Lan
+              role: OPERATOR
+      responses:
+        '201':
+          description: Tạo Staff thành công.
+          headers:
+            Location:
+              description: URI của Staff vừa tạo.
+              schema:
+                type: string
+                example: /api/v1/staff/stf_01HXYZ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    get:
+      tags: [Staff]
+      operationId: listStaff
+      summary: Lấy danh sách nhân viên vận hành
+      description: Chỉ ADMIN được phép gọi.
+      x-requirement-source: Yêu cầu bổ sung CRUD cho từng user
+      x-traceability: [BR14, FR14.1, FR14.2, FR14.3, BR15, FR15.5]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+        - name: role
+          in: query
+          description: Lọc theo vai trò quản trị; giá trị cụ thể đang TBD.
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          description: Tìm theo họ tên hoặc username.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Danh sách Staff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /staff/{staffId}:
+    parameters:
+      - $ref: '#/components/parameters/StaffId'
+    get:
+      tags: [Staff]
+      operationId: getStaffById
+      summary: Xem chi tiết nhân viên vận hành
+      description: Staff được xem hồ sơ của mình; ADMIN được xem Staff khác.
+      x-requirement-source: Yêu cầu bổ sung CRUD cho từng user
+      x-traceability: [BR14, FR14.1, FR14.2, BR15, FR15.1, FR15.5]
+      responses:
+        '200':
+          description: Thông tin Staff.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Staff]
+      operationId: updateStaff
+      summary: Cập nhật nhân viên vận hành
+      description: |
+        Staff chỉ được cập nhật họ tên của mình. ADMIN được cập nhật role và status.
+        Việc thay đổi quyền hoặc trạng thái phải được ghi AuditLog.
+      x-requirement-source: Yêu cầu bổ sung CRUD cho từng user
+      x-traceability: [BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Staff'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Staff]
+      operationId: deleteStaff
+      summary: Ngừng hoạt động tài khoản nhân viên
+      description: |
+        Chỉ ADMIN được phép thực hiện. Hệ thống chuyển trạng thái sang INACTIVE,
+        không xóa vật lý AuditLog và không cho phép ADMIN tự vô hiệu hóa chính mình.
+      x-requirement-source: Yêu cầu bổ sung CRUD cho từng user
+      x-traceability: [BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.6]
+      responses:
+        '204':
+          description: Tài khoản Staff đã được ngừng hoạt động.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Không thể tự vô hiệu hóa hoặc thao tác gây mất ADMIN cuối cùng.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    StaffId:
+      name: staffId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: stf_01HXYZ
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  schemas:
+    AccountStatus:
+      type: string
+      description: Giá trị kỹ thuật đề xuất; chính sách trạng thái cần được xác nhận.
+      enum: [ACTIVE, INACTIVE, LOCKED]
+    StaffCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, fullName, role]
+      properties:
+        username:
+          type: string
+          minLength: 4
+          maxLength: 50
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Cấp quyền cụ thể là TBD; OPERATOR chỉ là ví dụ.
+    StaffUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: Chỉ ADMIN được cập nhật; danh sách role là TBD.
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    Staff:
+      type: object
+      required: [staffId, userId, username, userType, fullName, role, status, createdAt, updatedAt]
+      properties:
+        staffId:
+          type: string
+          example: stf_01HXYZ
+        userId:
+          type: string
+          example: usr_01HXYZ
+        username:
+          type: string
+          example: operator.lan
+        userType:
+          type: string
+          enum: [STAFF]
+        fullName:
+          type: string
+          example: Nguyễn Thị Lan
+        role:
+          type: string
+          example: OPERATOR
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    StaffListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Staff'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: STAFF_NOT_FOUND
+        message:
+          type: string
+          example: Không tìm thấy nhân viên vận hành.
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        traceId:
+          type: string
+          example: req_01HXYZ
+  responses:
+    BadRequest:
+      description: Request không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Chưa xác thực hoặc token không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Người dùng không có quyền thực hiện thao tác.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy Staff.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Username đã tồn tại hoặc thao tác xung đột với trạng thái hiện tại.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Dữ liệu đúng cú pháp nhưng không đạt quy tắc kiểm tra.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

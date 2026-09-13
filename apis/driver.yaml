@@ -1,0 +1,359 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Driver API
+  version: 1.0.0
+  description: |
+    API quản lý tài khoản và hồ sơ tài xế theo mô hình CRUD.
+    Phương tiện và vị trí là tài nguyên liên quan, không bị xóa theo tài khoản tài xế.
+    DELETE là soft delete để bảo toàn chuyến đi, đánh giá và dữ liệu audit.
+servers:
+  - url: /api/v1
+tags:
+  - name: Drivers
+security:
+  - bearerAuth: []
+
+paths:
+  /drivers:
+    post:
+      tags: [Drivers]
+      operationId: createDriver
+      summary: Tạo tài khoản tài xế
+      description: |
+        Tài xế có thể tự đăng ký không cần token; Staff có thể tạo tài khoản tài xế.
+        Hệ thống suy ra người tạo từ ngữ cảnh xác thực, client không tự khai báo vai trò.
+      security: []
+      x-traceability: [BR01, FR01.2, FR01.3, UC01, AC01.2, BRU-02]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverCreateRequest'
+            example:
+              username: driver.an
+              password: StrongPassword123!
+              fullName: Trần Văn An
+              phone: "0912345678"
+      responses:
+        '201':
+          description: Tạo tài xế thành công.
+          headers:
+            Location:
+              description: URI của tài xế vừa tạo.
+              schema:
+                type: string
+                example: /api/v1/drivers/drv_01HXYZ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    get:
+      tags: [Drivers]
+      operationId: listDrivers
+      summary: Lấy danh sách tài xế
+      description: Chỉ Staff có quyền quản lý tài xế được phép gọi.
+      x-traceability: [BR13, FR13.2, FR13.6, UC17, AC13.1, AC13.3, BR14]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/AccountStatus'
+        - name: activityStatus
+          in: query
+          schema:
+            type: string
+        - name: availabilityStatus
+          in: query
+          schema:
+            type: string
+        - name: keyword
+          in: query
+          description: Tìm theo họ tên, số điện thoại hoặc username.
+          schema:
+            type: string
+            maxLength: 100
+      responses:
+        '200':
+          description: Danh sách tài xế.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DriverListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /drivers/{driverId}:
+    parameters:
+      - $ref: '#/components/parameters/DriverId'
+    get:
+      tags: [Drivers]
+      operationId: getDriverById
+      summary: Xem chi tiết tài xế
+      description: Tài xế chỉ xem hồ sơ của mình; Staff được xem khi có quyền.
+      x-traceability: [BR02, FR02.3, BR13, FR13.2, UC04, UC17, AC02.4, BR15]
+      responses:
+        '200':
+          description: Thông tin tài xế.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Drivers]
+      operationId: updateDriver
+      summary: Cập nhật tài xế
+      description: |
+        Tài xế được cập nhật hồ sơ, trạng thái hoạt động và trạng thái sẵn sàng của mình.
+        Staff có quyền quản lý được cập nhật trạng thái tài khoản. Trường không gửi được giữ nguyên.
+      x-traceability: [BR01, FR01.7, BR02, FR02.1, FR02.5, FR02.6, UC03, UC05, AC01.4, AC02.1, AC02.2, AC02.3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverUpdateRequest'
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    delete:
+      tags: [Drivers]
+      operationId: deleteDriver
+      summary: Ngừng hoạt động tài khoản tài xế
+      description: |
+        Chỉ Staff có quyền nhạy cảm được phép thực hiện. Tài khoản chuyển sang INACTIVE,
+        tài xế không thể nhận chuyến mới, dữ liệu liên quan không bị xóa vật lý và thao tác
+        phải được ghi AuditLog. Không thực hiện nếu tài xế đang có chuyến chưa kết thúc.
+      x-traceability: [BR13, FR13.2, BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.6]
+      responses:
+        '204':
+          description: Tài khoản tài xế đã được ngừng hoạt động.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Tài xế đang có chuyến chưa kết thúc hoặc trạng thái không cho phép.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    DriverId:
+      name: driverId
+      in: path
+      required: true
+      schema:
+        type: string
+        example: drv_01HXYZ
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  schemas:
+    AccountStatus:
+      type: string
+      description: Giá trị kỹ thuật đề xuất; chính sách trạng thái cần được xác nhận.
+      enum: [ACTIVE, INACTIVE, LOCKED]
+    DriverCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password, fullName, phone]
+      properties:
+        username:
+          type: string
+          minLength: 4
+          maxLength: 50
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{9,15}$'
+    DriverUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 100
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{9,15}$'
+        activityStatus:
+          type: string
+          description: Giá trị cụ thể cần được xác nhận theo chính sách vận hành.
+          example: WORKING
+        availabilityStatus:
+          type: string
+          description: Chỉ AVAILABLE mới được xem xét matching.
+          example: AVAILABLE
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    Driver:
+      type: object
+      required: [driverId, userId, username, userType, fullName, phone, status, activityStatus, availabilityStatus, createdAt, updatedAt]
+      properties:
+        driverId:
+          type: string
+          example: drv_01HXYZ
+        userId:
+          type: string
+          example: usr_01HXYZ
+        username:
+          type: string
+          example: driver.an
+        userType:
+          type: string
+          enum: [DRIVER]
+        fullName:
+          type: string
+          example: Trần Văn An
+        phone:
+          type: string
+          example: "0912345678"
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        activityStatus:
+          type: string
+          example: WORKING
+        availabilityStatus:
+          type: string
+          example: AVAILABLE
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    DriverListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Driver'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: DRIVER_NOT_FOUND
+        message:
+          type: string
+          example: Không tìm thấy tài xế.
+        details:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        traceId:
+          type: string
+          example: req_01HXYZ
+  responses:
+    BadRequest:
+      description: Request không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Chưa xác thực hoặc token không hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Người dùng không có quyền thực hiện thao tác.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Không tìm thấy tài xế.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Username hoặc số điện thoại đã tồn tại, hoặc xung đột trạng thái.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Dữ liệu đúng cú pháp nhưng không đạt quy tắc kiểm tra.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
