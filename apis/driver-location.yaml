@@ -1,0 +1,190 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Driver Location API
+  version: 1.0.0
+  description: |
+    API CRUD bản ghi vị trí tài xế. Dữ liệu vị trí là dữ liệu nhạy cảm; Driver chỉ
+    truy cập dữ liệu của mình, Staff/Internal Service chỉ truy cập khi có quyền.
+    Tần suất cập nhật và thời gian lưu dữ liệu vẫn là TBD trong SRS.
+servers:
+  - url: /api/v1
+tags:
+  - name: Driver Locations
+security:
+  - bearerAuth: []
+paths:
+  /driver-locations:
+    post:
+      tags: [Driver Locations]
+      operationId: createDriverLocation
+      summary: Gửi vị trí hiện tại của tài xế
+      description: Driver gửi vị trí của chính mình; thời gian máy chủ được dùng nếu recordedAt bị bỏ trống.
+      x-traceability: [BR03, FR03.1, FR03.2, UC05, AC03.1, BR15, FR15.3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DriverLocationCreateRequest'}
+            example:
+              driverId: drv_01HXYZ
+              latitude: 10.8231
+              longitude: 106.6297
+              recordedAt: '2026-09-13T15:30:00+07:00'
+      responses:
+        '201':
+          description: Vị trí được ghi nhận.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/driver-locations/loc_01HXYZ}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverLocation'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Driver Locations]
+      operationId: listDriverLocations
+      summary: Tra cứu lịch sử vị trí tài xế
+      description: Chỉ chủ thể dữ liệu hoặc người có quyền vận hành phù hợp được truy cập.
+      x-traceability: [BR03, FR03.2, FR03.3, FR03.4, BR13, FR13.6, BR15, FR15.3, FR15.5]
+      parameters:
+        - name: driverId
+          in: query
+          required: true
+          schema: {type: string}
+        - name: from
+          in: query
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          schema: {type: string, format: date-time}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Danh sách vị trí theo thời gian giảm dần.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverLocationListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /driver-locations/{locationId}:
+    parameters:
+      - {$ref: '#/components/parameters/LocationId'}
+    get:
+      tags: [Driver Locations]
+      operationId: getDriverLocationById
+      summary: Xem một bản ghi vị trí
+      x-traceability: [BR03, FR03.2, BR15, FR15.3, FR15.5]
+      responses:
+        '200':
+          description: Chi tiết vị trí.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverLocation'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Driver Locations]
+      operationId: updateDriverLocation
+      summary: Hiệu chỉnh bản ghi vị trí
+      description: Chỉ dùng để sửa bản ghi vừa gửi sai; mọi thay đổi phải được audit.
+      x-requirement-source: CRUD bổ sung; không thay thế luồng gửi vị trí mới
+      x-traceability: [BR03, FR03.2, BR14, FR14.1, FR14.4, BR15, FR15.3, FR15.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DriverLocationUpdateRequest'}
+      responses:
+        '200':
+          description: Hiệu chỉnh thành công.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverLocation'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    delete:
+      tags: [Driver Locations]
+      operationId: deleteDriverLocation
+      summary: Xóa logic bản ghi vị trí
+      description: Chỉ dịch vụ lưu trữ hoặc Staff có quyền được phép; thời gian lưu dữ liệu là TBD.
+      x-requirement-source: CRUD bổ sung, phụ thuộc chính sách lưu trữ TBD
+      x-traceability: [BR14, FR14.1, FR14.4, BR15, FR15.3, FR15.6]
+      responses:
+        '204': {description: Bản ghi được đánh dấu đã xóa.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    LocationId:
+      name: locationId
+      in: path
+      required: true
+      schema: {type: string, example: loc_01HXYZ}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  schemas:
+    DriverLocationCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [driverId, latitude, longitude]
+      properties:
+        driverId: {type: string}
+        latitude: {type: number, format: double, minimum: -90, maximum: 90}
+        longitude: {type: number, format: double, minimum: -180, maximum: 180}
+        recordedAt: {type: string, format: date-time}
+    DriverLocationUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        latitude: {type: number, format: double, minimum: -90, maximum: 90}
+        longitude: {type: number, format: double, minimum: -180, maximum: 180}
+        recordedAt: {type: string, format: date-time}
+    DriverLocation:
+      allOf:
+        - $ref: '#/components/schemas/DriverLocationCreateRequest'
+        - type: object
+          required: [locationId, createdAt]
+          properties:
+            locationId: {type: string, example: loc_01HXYZ}
+            createdAt: {type: string, format: date-time}
+            updatedAt: {type: string, format: date-time}
+    DriverLocationListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DriverLocation'}}
+        page: {type: integer}
+        pageSize: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: LOCATION_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy bản ghi vị trí.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthorized: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Forbidden: {description: Không có quyền truy cập dữ liệu vị trí, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Không tìm thấy bản ghi vị trí, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    UnprocessableEntity: {description: Tọa độ hoặc dữ liệu không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

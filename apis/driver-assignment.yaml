@@ -1,0 +1,189 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Driver Assignment API
+  version: 1.0.0
+  description: |
+    API quản lý lần đề xuất/phân công tài xế. Việc tạo và thu hồi assignment do
+    Matching Service hoặc Staff có quyền thực hiện; Driver chỉ xem và phản hồi.
+    Tiêu chí ưu tiên và thời gian phản hồi vẫn là TBD.
+servers:
+  - url: /api/v1
+tags:
+  - name: Driver Assignments
+security:
+  - bearerAuth: []
+paths:
+  /driver-assignments:
+    post:
+      tags: [Driver Assignments]
+      operationId: createDriverAssignment
+      summary: Tạo đề xuất chuyến cho tài xế
+      description: Internal Matching Service tạo assignment và phát thông báo chuyến mới.
+      x-traceability: [BR05, FR05.1, FR05.2, FR05.3, FR05.4, FR05.5, UC07, AC05.1, AC05.2, AC05.3]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AssignmentCreateRequest'}
+            example: {tripId: trip_01HXYZ, driverId: drv_01HXYZ}
+      responses:
+        '201':
+          description: Assignment được tạo và gửi cho tài xế.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/driver-assignments/asg_01HXYZ}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverAssignment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Driver Assignments]
+      operationId: listDriverAssignments
+      summary: Lấy danh sách đề xuất chuyến
+      description: Driver xem đề xuất của mình; Staff/Internal Service tra cứu theo quyền.
+      x-traceability: [BR05, FR05.5, UC07, UC08, AC05.3, BR13, FR13.4]
+      parameters:
+        - name: driverId
+          in: query
+          schema: {type: string}
+        - name: tripId
+          in: query
+          schema: {type: string}
+        - name: status
+          in: query
+          schema: {$ref: '#/components/schemas/AssignmentStatus'}
+        - {$ref: '#/components/parameters/Page'}
+        - {$ref: '#/components/parameters/PageSize'}
+      responses:
+        '200':
+          description: Danh sách assignment.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AssignmentListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /driver-assignments/{assignmentId}:
+    parameters:
+      - {$ref: '#/components/parameters/AssignmentId'}
+    get:
+      tags: [Driver Assignments]
+      operationId: getDriverAssignmentById
+      summary: Xem chi tiết đề xuất chuyến
+      x-traceability: [BR05, FR05.5, UC08, AC05.3]
+      responses:
+        '200':
+          description: Chi tiết assignment.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverAssignment'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Driver Assignments]
+      operationId: updateDriverAssignment
+      summary: Cập nhật trạng thái đề xuất
+      description: |
+        Driver chỉ được chuyển PENDING sang ACCEPTED hoặc REJECTED. Internal Service
+        được chuyển sang NO_RESPONSE; Staff chỉ can thiệp khi có quyền và phải audit.
+      x-traceability: [BR05, FR05.6, FR05.7, FR05.8, FR05.9, FR05.10, UC08, AC05.3, AC05.4, AC05.5, AC05.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AssignmentUpdateRequest'}
+            example: {assignmentStatus: ACCEPTED}
+      responses:
+        '200':
+          description: Phản hồi được ghi nhận.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DriverAssignment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    delete:
+      tags: [Driver Assignments]
+      operationId: deleteDriverAssignment
+      summary: Thu hồi đề xuất chuyến
+      description: Soft delete thành CANCELLED; chỉ Internal Service hoặc Staff có quyền được gọi.
+      x-traceability: [BR05, FR05.9, FR05.10, BR14, FR14.1, FR14.4, BR15, FR15.6]
+      responses:
+        '204': {description: Assignment đã được thu hồi.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    AssignmentId:
+      name: assignmentId
+      in: path
+      required: true
+      schema: {type: string, example: asg_01HXYZ}
+    Page:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, default: 1}
+    PageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100, default: 20}
+  schemas:
+    AssignmentStatus:
+      type: string
+      enum: [PENDING, ACCEPTED, REJECTED, NO_RESPONSE, CANCELLED]
+    AssignmentCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [tripId, driverId]
+      properties:
+        tripId: {type: string}
+        driverId: {type: string}
+    AssignmentUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [assignmentStatus]
+      properties:
+        assignmentStatus: {$ref: '#/components/schemas/AssignmentStatus'}
+    DriverAssignment:
+      type: object
+      required: [assignmentId, tripId, driverId, assignmentStatus, requestedAt]
+      properties:
+        assignmentId: {type: string, example: asg_01HXYZ}
+        tripId: {type: string, example: trip_01HXYZ}
+        driverId: {type: string, example: drv_01HXYZ}
+        assignmentStatus: {$ref: '#/components/schemas/AssignmentStatus'}
+        requestedAt: {type: string, format: date-time}
+        respondedAt: {type: string, format: date-time, nullable: true}
+    AssignmentListResponse:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/DriverAssignment'}}
+        page: {type: integer}
+        pageSize: {type: integer}
+        totalItems: {type: integer}
+        totalPages: {type: integer}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: ASSIGNMENT_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy đề xuất chuyến.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthorized: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Forbidden: {description: Không có quyền thực hiện, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Không tìm thấy assignment, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Conflict: {description: Assignment đã được phản hồi hoặc trạng thái không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    UnprocessableEntity: {description: Driver hoặc Trip không đạt điều kiện phân công, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

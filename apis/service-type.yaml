@@ -1,0 +1,165 @@
+openapi: 3.0.3
+info:
+  title: CAB System - Service Type API
+  version: 1.0.0
+  description: |
+    API CRUD loại dịch vụ/loại xe. Customer và Driver được đọc danh mục;
+    chỉ Staff có quyền quản trị mới được tạo, sửa hoặc ngừng sử dụng.
+servers:
+  - url: /api/v1
+tags:
+  - name: Service Types
+security:
+  - bearerAuth: []
+paths:
+  /service-types:
+    post:
+      tags: [Service Types]
+      operationId: createServiceType
+      summary: Tạo loại dịch vụ
+      description: Chỉ Staff có quyền cấu hình dịch vụ; thao tác phải được audit.
+      x-requirement-source: Hỗ trợ FR04.3 và khả năng mở rộng loại dịch vụ
+      x-traceability: [BG-12, BR04, FR04.3, BR14, FR14.1, FR14.4, BR15, FR15.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceTypeCreateRequest'}
+            example: {serviceName: Xe máy, description: Dịch vụ xe máy}
+      responses:
+        '201':
+          description: Tạo loại dịch vụ thành công.
+          headers:
+            Location:
+              schema: {type: string, example: /api/v1/service-types/BIKE}
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceType'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '422': {$ref: '#/components/responses/UnprocessableEntity'}
+    get:
+      tags: [Service Types]
+      operationId: listServiceTypes
+      summary: Lấy danh sách loại dịch vụ
+      description: Dùng khi khách hàng chọn loại xe và tài xế khai báo phương tiện.
+      security: []
+      x-traceability: [BR04, FR04.3, UC06, AC04.1, BR09, FR09.2]
+      parameters:
+        - name: status
+          in: query
+          schema: {type: string, example: ACTIVE}
+      responses:
+        '200':
+          description: Danh sách loại dịch vụ.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ServiceType'}
+  /service-types/{serviceTypeId}:
+    parameters:
+      - {$ref: '#/components/parameters/ServiceTypeId'}
+    get:
+      tags: [Service Types]
+      operationId: getServiceTypeById
+      summary: Xem chi tiết loại dịch vụ
+      security: []
+      x-traceability: [BR04, FR04.3, BR09, FR09.2]
+      responses:
+        '200':
+          description: Chi tiết loại dịch vụ.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceType'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Service Types]
+      operationId: updateServiceType
+      summary: Cập nhật loại dịch vụ
+      description: Chỉ Staff có quyền cấu hình dịch vụ.
+      x-requirement-source: Khả năng bổ sung và thay đổi loại dịch vụ
+      x-traceability: [BG-12, BR14, FR14.1, FR14.2, FR14.4, BR15, FR15.6]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ServiceTypeUpdateRequest'}
+      responses:
+        '200':
+          description: Cập nhật thành công.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ServiceType'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    delete:
+      tags: [Service Types]
+      operationId: deleteServiceType
+      summary: Ngừng sử dụng loại dịch vụ
+      description: Soft delete; không xóa loại dịch vụ đã được chuyến hoặc phương tiện tham chiếu.
+      x-traceability: [BR14, FR14.1, FR14.2, FR14.3, FR14.4, BR15, FR15.6]
+      responses:
+        '204': {description: Loại dịch vụ đã chuyển sang INACTIVE.}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Không thể ngừng do đang được sử dụng trong cấu hình hoạt động.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ErrorResponse'}
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    ServiceTypeId:
+      name: serviceTypeId
+      in: path
+      required: true
+      schema: {type: string, example: BIKE}
+  schemas:
+    ServiceTypeCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [serviceName]
+      properties:
+        serviceName: {type: string, minLength: 1, maxLength: 100}
+        description: {type: string, maxLength: 500}
+    ServiceTypeUpdateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        serviceName: {type: string, minLength: 1, maxLength: 100}
+        description: {type: string, maxLength: 500}
+        status: {type: string, example: ACTIVE}
+    ServiceType:
+      type: object
+      required: [serviceTypeId, serviceName, status, createdAt, updatedAt]
+      properties:
+        serviceTypeId: {type: string, example: BIKE}
+        serviceName: {type: string, example: Xe máy}
+        description: {type: string, example: Dịch vụ xe máy}
+        status: {type: string, example: ACTIVE}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code: {type: string, example: SERVICE_TYPE_NOT_FOUND}
+        message: {type: string, example: Không tìm thấy loại dịch vụ.}
+        traceId: {type: string, example: req_01HXYZ}
+  responses:
+    BadRequest: {description: Request không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Unauthorized: {description: Chưa xác thực hoặc token không hợp lệ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Forbidden: {description: Không có quyền thực hiện, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    NotFound: {description: Không tìm thấy loại dịch vụ, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    Conflict: {description: Tên bị trùng hoặc xung đột trạng thái, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+    UnprocessableEntity: {description: Dữ liệu không đạt quy tắc kiểm tra, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
